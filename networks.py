@@ -35,3 +35,28 @@ def dueling_dqn(input_shape, action_size, learning_rate):
     model.compile(loss='mse', optimizer=adam)
 
     return model
+
+def a2c_lstm(input_shape, action_size, value_size, learning_rate):
+    """Actor and Critic Network share convolution layers with LSTM
+    """
+
+    state_input = Input(shape=(input_shape)) # 4x64x64x3
+    x = TimeDistributed(Convolution2D(32, 8, 8, subsample=(4,4), activation='relu'))(state_input)
+    x = TimeDistributed(Convolution2D(64, 4, 4, subsample=(2,2), activation='relu'))(x)
+    x = TimeDistributed(Convolution2D(64, 3, 3, activation='relu'))(x)
+    x = TimeDistributed(Flatten())(x)
+
+    x = LSTM(512, activation='tanh')(x)
+
+    # Actor Stream
+    actor = Dense(action_size, activation='softmax')(x)
+
+    # Critic Stream
+    critic = Dense(value_size, activation='linear')(x)
+
+    model = Model(input=state_input, output=[actor, critic])
+
+    adam = Adam(lr=learning_rate, clipnorm=1.0)
+    model.compile(loss=['categorical_crossentropy', 'mse'], optimizer=adam, loss_weights=[1., 1.])
+
+    return model
