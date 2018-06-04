@@ -1,0 +1,4 @@
+_vizdoom.ini
+
+statistics/*
+!statistics/.gitkeep
