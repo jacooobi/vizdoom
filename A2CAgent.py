@@ -99,10 +99,22 @@ class A2CAgent:
 
         # if (misc[1] < prev_misc[1]): #use ammo
             #print ("Use ammo")
-            # r_t = r_t - 0.1
+        #     # r_t = r_t - 0.1
 
-        if (misc[0] < prev_misc[0]): #loss HEALTH
-            #print ("Loss Health")
-            r_t = r_t - 0.1
+        # if (misc[0] < prev_misc[0]): #loss HEALTH
+        #     #print ("Loss Health")
+        #     r_t = ((prev_misc[0] - misc[0]) / 100)*(-1)
+        #     # print("Shaping reward, loss health: ", r_t)
+        # else:
+        #     r_t = 0.1
+            # print("Shaping reward, health OK: ", r_t)
 
         return r_t
+
+        # load the saved model
+    def load_model(self, name):
+        self.model.load_weights(name)
+
+    # save the model which is under training
+    def save_model(self, name):
+        self.model.save_weights(name)
