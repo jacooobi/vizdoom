@@ -27,15 +27,15 @@ import tensorflow as tf
 from networks import a2c_lstm
 from A2CAgent import A2CAgent
 
-skip_learning = False
+skip_learning = True
 load_model = True
-model_path = './model/a2c_lstm.h5'
+model_path = './model/a2c_lstm_preprocessed.h5'
 
-def preprocessImg(img, size):
-
+def preprocess_img(img, size):
+    x, y = size
     img = np.rollaxis(img, 0, 3)    # It becomes (640, 480, 3)
-    img = skimage.transform.resize(img,size)
-
+    img = skimage.transform.resize(img[150:400, :], size) # Ucinamy sufit i UI gry
+    img = np.resize(img[:, :, 0], (x, y, 1)) # wycinamy tylko kanał RED, bo na nim najlepiej widać pociski
     return img
 
 if __name__ == "__main__":
@@ -48,11 +48,11 @@ if __name__ == "__main__":
 
     game = DoomGame()
     game.load_config("./scenarios/take_cover.cfg")
-    game.set_sound_enabled(True)
+    game.set_sound_enabled(False)
     game.set_screen_resolution(ScreenResolution.RES_640X480)
-    game.set_window_visible(False)
+    game.set_window_visible(skip_learning)
     game.init()
-    print("Doom initialized!.")
+    print("Doom initialized!")
 
     # Maximum number of episodes
     max_episodes = 100000
@@ -65,14 +65,13 @@ if __name__ == "__main__":
     action_size = game.get_available_buttons_size()
 
     img_rows , img_cols = 64, 64
-    img_channels = 3 # Color Channels
+    img_channels = 1 # Color Channels
     # Convert image into Black and white
     trace_length = 4 # RNN states
 
     state_size = (trace_length, img_rows, img_cols, img_channels)
     agent = A2CAgent(state_size, action_size, trace_length)
     agent.model = a2c_lstm(state_size, action_size, agent.value_size, agent.learning_rate)
-
 
     if load_model:
       agent.load_model(model_path)
@@ -96,7 +95,7 @@ if __name__ == "__main__":
           prev_misc = misc
 
           x_t = game_state.screen_buffer # 480 x 640
-          x_t = preprocessImg(x_t, size=(img_rows, img_cols))
+          x_t = preprocess_img(x_t, size=(img_rows, img_cols))
           s_t = np.stack(tuple([x_t]*trace_length), axis=0)  # It becomes 4x64x64x3
           s_t = np.expand_dims(s_t, axis=0)  # 1x4x68x64x3
 
@@ -109,15 +108,25 @@ if __name__ == "__main__":
               a_t = np.zeros([action_size]) # Initialize action at time t
 
               x_t = game_state.screen_buffer
-              x_t = preprocessImg(x_t, size=(img_rows, img_cols))
+              x_t = preprocess_img(x_t, size=(img_rows, img_cols))
               x_t = np.reshape(x_t, (1, 1, img_rows, img_cols, img_channels))
               s_t = np.append(s_t[:, 1:, :, :, :], x_t, axis=1) # 1x4x68x64x3
 
-              # Sample action from stochastic softmax policy
+              position = game_state.game_variables[1]
               action_idx, policy  = agent.get_action(s_t)
               a_t[action_idx] = 1
 
-              a_t = a_t.astype(int)
+              # TUTAJ pomysł, żeby ograniczać jego ruchy uniemożliwiając skręcenie w lewo/prawy gdy blisko ściany - nie działą
+              # if position > 720:
+              #   action_idx = 1
+              #   a_t[action_idx] = 1
+
+              # elif position < 30:
+              #   action_idx = 0
+              #   a_t[action_idx] = 1
+
+              a_t = a_t.astype(int) # Sample action from stochastic softmax policy
+
               game.set_action(a_t.tolist())
               skiprate = agent.frame_per_action # Frame Skipping = 4
               game.advance_action(skiprate)
@@ -154,9 +163,9 @@ if __name__ == "__main__":
                   loss = agent.train_model()
 
               # Save model every 10000 iterations
-              if t % 10000 == 0:
+              if t % 2000 == 0:
                   print("Save model")
-                  agent.model.save_weights("models/a2c_lstm.h5", overwrite=True)
+                  agent.model.save_weights(model_path, overwrite=True)
 
               state = ""
               if t <= agent.observe:
@@ -167,7 +176,7 @@ if __name__ == "__main__":
               if (is_terminated):
 
                   # Print performance statistics at every episode end
-                  print("TIME", t, "/ GAME", GAME, "/ STATE", state, "/ ACTION", action_idx, "/ REWARD", r_t, "/ LIFE", max_life, "/ LOSS", loss)
+                  print("Episode", i, "/ ACTION", action_idx, "/ total reward", game.get_total_reward(), "/ LOSS", loss)
 
                   # Save Agent's Performance Statistics
                   if GAME % agent.stats_window_size == 0 and t > agent.observe:
@@ -192,30 +201,37 @@ if __name__ == "__main__":
           # Episode Finish. Increment game count
           GAME += 1
 
+    # kod do obejrzenia agenta
     if skip_learning:
       for _ in range(20):
         game.new_episode()
 
         while not game.is_episode_finished():
           game_state = game.get_state()
-          x_t = game_state.screen_buffer  # 480 x 640
+
+          x_t = game_state.screen_buffer # 480 x 640
           x_t = preprocess_img(x_t, size=(img_rows, img_cols))
-          s_t = np.stack(([x_t] * 4), axis=2)  # It becomes 64x64x4
+          s_t = np.stack(tuple([x_t]*trace_length), axis=0)  # It becomes 4x64x64x3
           s_t = np.expand_dims(s_t, axis=0)
 
-          a_t = np.zeros([action_size])
+          a_t = np.zeros([action_size]) # Initialize action at time t
 
-            # Epsilon Greedy
-          action_idx = agent.get_action(s_t)
+          x_t = game_state.screen_buffer
+          position = game_state.game_variables[1]
+
+          x_t = preprocess_img(x_t, size=(img_rows, img_cols))
+          x_t = np.reshape(x_t, (1, 1, img_rows, img_cols, img_channels))
+          s_t = np.append(s_t[:, 1:, :, :, :], x_t, axis=1) # 1x4x68x64x3
+
+          action_idx, policy  = agent.get_action(s_t)
           a_t[action_idx] = 1
 
           a_t = a_t.astype(int)
           game.set_action(a_t.tolist())
+          # skiprate = agent.frame_per_action # Frame Skipping = 4
+          # for _ in range(10):
+          game.advance_action()
 
-          for _ in range(6):
-            game.advance_action()
-
-          # Sleep between episodes
         sleep(1.0)
         score = game.get_total_reward()
         print("Total score: ", score)
