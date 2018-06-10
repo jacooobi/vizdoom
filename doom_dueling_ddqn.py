@@ -12,26 +12,12 @@ from keras import backend as K
 from vizdoom import DoomGame, ScreenResolution
 from vizdoom import *
 
-from DoubleDQNAgent import DoubleDQNAgent
+from agents.DoubleDQNAgent import DoubleDQNAgent
 from networks import dueling_dqn
+from utils import preprocess_img
 
 
 MODEL_SAVING_INTERVAL = 5000
-
-
-def preprocess_img(img, size):
-    x, y = size
-    img = np.rollaxis(img, 0, 3)    # It becomes (640, 480, 3)
-    img = skimage.transform.resize(
-        img[150:400, :], size)  # Ucinamy sufit i UI gry
-
-    # wycinamy tylko kanał RED, bo na nim najlepiej widać pociski
-    img = np.resize(img[:, :, 0], (x, y, 1))
-    img = np.squeeze(img, axis=2)
-
-    # imsave('./test.png', img)
-
-    return img
 
 
 def get_args():
@@ -116,8 +102,8 @@ if __name__ == "__main__":
         # Epsilon Greedy
         action_idx = agent.get_action(s_t)
         a_t[action_idx] = 1
-
         a_t = a_t.astype(int)
+
         game.set_action(a_t.tolist())
         skiprate = agent.frame_per_action
         game.advance_action(skiprate)

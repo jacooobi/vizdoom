@@ -23,7 +23,7 @@ from time import sleep
 import tensorflow as tf
 
 from networks import a2c_lstm
-from A2CAgent import A2CAgent
+from agents.A2CAgent import A2CAgent
 
 REWARDS_FILE = './rewards.csv'
 
