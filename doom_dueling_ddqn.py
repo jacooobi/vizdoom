@@ -1,38 +1,50 @@
-#!/usr/bin/env python
+import random
+import numpy as np
+import argparse
 
 import skimage as skimage
 from skimage import transform, color, exposure
-from skimage.viewer import ImageViewer
-import random
-from random import choice
-import numpy as np
-from collections import deque
-import time
+from skimage.io import imsave
 
-import json
-from keras.models import model_from_json
-from keras.models import Sequential, load_model, Model
-from keras.layers.merge import add
-from keras.layers import Flatten, Dense, Lambda, Input, merge, Conv2D
-from keras.optimizers import Adam
+import tensorflow as tf
 from keras import backend as K
 
 from vizdoom import DoomGame, ScreenResolution
 from vizdoom import *
-import itertools as it
-from time import sleep
-import tensorflow as tf
 
 from DoubleDQNAgent import DoubleDQNAgent
 from networks import dueling_dqn
 
 
+MODEL_SAVING_INTERVAL = 5000
+
+
 def preprocess_img(img, size):
+    x, y = size
     img = np.rollaxis(img, 0, 3)    # It becomes (640, 480, 3)
-    img = skimage.transform.resize(img, size)
-    img = skimage.color.rgb2gray(img)
+    img = skimage.transform.resize(
+        img[150:400, :], size)  # Ucinamy sufit i UI gry
+
+    # wycinamy tylko kanał RED, bo na nim najlepiej widać pociski
+    img = np.resize(img[:, :, 0], (x, y, 1))
+    img = np.squeeze(img, axis=2)
+
+    # imsave('./test.png', img)
 
     return img
+
+
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', type=str, default='./model/dueling_ddqn.h5',
+                        help='Save model path')
+    parser.add_argument(
+        '--scenario', default='./scenarios/take_cover_slow_imps.cfg')
+    parser.add_argument('--load-model', action='store_true', help='Load model')
+    parser.add_argument('--show-window', action='store_true',
+                        help='Force showing window')
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":
@@ -42,11 +54,17 @@ if __name__ == "__main__":
     sess = tf.Session(config=config)
     K.set_session(sess)
 
+    args = get_args()
+    model_path = args.model
+    load_model = args.load_model
+    show_window = args.show_window
+    scenario = args.scenario
+
     game = DoomGame()
-    game.load_config('./scenarios/take_cover.cfg')
+    game.load_config(scenario)
     game.set_sound_enabled(False)
     game.set_screen_resolution(ScreenResolution.RES_640X480)
-    game.set_window_visible(True)
+    game.set_window_visible(show_window)
     game.init()
 
     game.new_episode()
@@ -56,8 +74,8 @@ if __name__ == "__main__":
 
     action_size = game.get_available_buttons_size()
 
-    img_rows, img_cols = 64, 64
     # Convert image into Black and white
+    img_rows, img_cols = 64, 64
     img_channels = 4  # We stack 4 frames
 
     state_size = (img_rows, img_cols, img_channels)
@@ -67,6 +85,10 @@ if __name__ == "__main__":
         state_size, action_size, agent.learning_rate)
     agent.target_model = dueling_dqn(
         state_size, action_size, agent.learning_rate)
+
+    if load_model:
+        print('Loading model: {}'.format(model_path))
+        agent.load_model(model_path)
 
     x_t = game_state.screen_buffer  # 480 x 640
     x_t = preprocess_img(x_t, size=(img_rows, img_cols))
@@ -78,7 +100,6 @@ if __name__ == "__main__":
     # Start training
     epsilon = agent.initial_epsilon
     GAME = 0
-    game_time = 0
     t = 0
     max_life = 0  # Maximum episode life (Proxy for agent performance)
     life = 0
@@ -104,21 +125,18 @@ if __name__ == "__main__":
         game_state = game.get_state()  # Observe again after we take the action
         is_terminated = game.is_episode_finished()
 
-        # each frame we get reward of 0.1, so 4 frames will be 0.4
+        # each frame we get reward of 2.5, so 4 frames will be 10.0
         r_t = game.get_last_reward()
 
-        game_time += 1
-
-        if (is_terminated):
-            if (life > max_life):
+        if is_terminated:
+            # It's just for agent performance
+            if life > max_life:
                 max_life = life
 
             GAME += 1
-            game_time = 0
             life_buffer.append(life)
-            # ammo_buffer.append(misc[1])
-            # kills_buffer.append(misc[0])
-            print("Episode Finish ", misc)
+            print('Episode Finish. r_t = {} '.format(r_t), misc)
+
             game.new_episode()
             game_state = game.get_state()
             misc = game_state.game_variables
@@ -131,9 +149,9 @@ if __name__ == "__main__":
         x_t1 = np.reshape(x_t1, (1, img_rows, img_cols, 1))
         s_t1 = np.append(x_t1, s_t[:, :, :, :3], axis=3)
 
-        r_t = agent.shape_reward(r_t, misc, prev_misc, t, game_time)
+        r_t = agent.shape_reward(r_t, misc, prev_misc, t)
 
-        if (is_terminated):
+        if is_terminated:
             life = 0
         else:
             life += 1
@@ -147,15 +165,15 @@ if __name__ == "__main__":
         # Do the training
         if t > agent.observe and t % agent.timestep_per_train == 0:
             Q_max, loss = agent.train_replay()
-            print('QMax={}, Loss={}'.format(Q_max, loss))
+            print('[Training] Q_max = {}, Loss = {}'.format(Q_max, loss))
 
         s_t = s_t1
         t += 1
 
-        # save progress every 10000 iterations
-        if t % 10000 == 0:
-            print("Now we save model")
-            agent.model.save_weights("model/dueling_ddqn.h5", overwrite=True)
+        # save progress every 5000 iterations
+        if t % MODEL_SAVING_INTERVAL == 0:
+            print('Saving model at {}'.format(model_path))
+            agent.model.save_weights(model_path, overwrite=True)
 
         # print info
         state = ""
@@ -166,10 +184,10 @@ if __name__ == "__main__":
         else:
             state = "train"
 
-        if (is_terminated):
-            print("TIME", t, "/ GAME", GAME, "/ STATE", state,
-                  "/ EPSILON", agent.epsilon, "/ ACTION", action_idx, "/ REWARD", r_t,
-                  "/ Q_MAX %e" % np.max(Q_max), "/ LIFE", max_life, "/ LOSS", loss)
+        if is_terminated:
+            # print("TIME", t, "/ GAME", GAME, "/ STATE", state,
+            #       "/ EPSILON", agent.epsilon, "/ ACTION", action_idx, "/ REWARD", r_t,
+            #       "/ Q_MAX %e" % np.max(Q_max), "/ LIFE", max_life, "/ LOSS", loss)
 
             # Save Agent's Performance Statistics
             if GAME % agent.stats_window_size == 0 and t > agent.observe:
@@ -180,7 +198,7 @@ if __name__ == "__main__":
                 agent.mavg_kill_counts.append(np.mean(np.array(kills_buffer)))
 
                 # Reset rolling stats buffer
-                life_buffer, ammo_buffer, kills_buffer = [], [], []
+                life_buffer = []
 
                 # Write Rolling Statistics to file
                 with open("statistics/dueling_ddqn_stats.txt", "w") as stats_file:

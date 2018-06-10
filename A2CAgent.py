@@ -41,7 +41,9 @@ class A2CAgent:
         return np.random.choice(self.action_size, 1, p=policy)[0], policy
 
     def get_callbacks(self):
-        os.remove('./training.csv')
+        if os.path.exists('./training.csv'):
+            os.remove('./training.csv')
+
         csv_logger = CSVLogger('training.csv', append=True)
         return [csv_logger]
 
@@ -107,7 +109,6 @@ class A2CAgent:
         if misc[0] < prev_misc[0]:  # loss HEALTHs
             r_t = -10.0
         elif misc[1] > 720 or misc[1] < 30:
-            print('PosY={}'.format(misc[1]))
             r_t = 0
 
         return r_t

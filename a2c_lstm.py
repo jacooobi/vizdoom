@@ -46,6 +46,7 @@ if __name__ == "__main__":
                         help='Turn on training process')
     parser.add_argument('--model', type=str, default='./model/a2c_lstm_preprocessed.h5',
                         help='Save model path')
+    parser.add_argument('--scenario', default='./scenarios/take_cover.cfg')
     parser.add_argument('--load-model', action='store_true', help='Load model')
     parser.add_argument('--log-dir', default='./logs',
                         help='Log directory for TensorBoard')
@@ -57,6 +58,9 @@ if __name__ == "__main__":
     load_model = args.load_model
     skip_learning = not args.train
     show_window = args.show_window
+    scenario = args.scenario
+
+    print('Scenario:', scenario)
 
     with open(REWARDS_FILE, 'w') as fp:
         fp.write('episode,reward\n')
@@ -68,7 +72,7 @@ if __name__ == "__main__":
     K.set_session(sess)
 
     game = DoomGame()
-    game.load_config("./scenarios/take_cover.cfg")
+    game.load_config(scenario)
     game.set_sound_enabled(False)
     game.set_screen_resolution(ScreenResolution.RES_640X480)
     game.set_window_visible(skip_learning or show_window)
@@ -157,7 +161,6 @@ if __name__ == "__main__":
 
                 # Each game we get 2.5 living reward, so 4 frames * 2.5 = 10
                 r_t = game.get_last_reward()
-                # print(r_t)
                 # Check if episode is terminated
                 is_terminated = game.is_episode_finished()
 

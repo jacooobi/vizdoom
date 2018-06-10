@@ -59,7 +59,7 @@ def a2c_lstm(input_shape, action_size, value_size, learning_rate):
     # Critic Stream
     critic = Dense(value_size, activation='linear')(x)
 
-    model = Model(input=state_input, output=[actor, critic])
+    model = Model(inputs=state_input, outputs=[actor, critic])
 
     adam = Adam(lr=learning_rate, clipnorm=1.0)
     model.compile(loss=['categorical_crossentropy', 'mse'],

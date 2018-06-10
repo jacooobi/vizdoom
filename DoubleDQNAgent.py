@@ -1,12 +1,14 @@
 import random
+import os
 import numpy as np
 from random import choice
 from collections import deque
+from keras.callbacks import CSVLogger
 
 
 class DoubleDQNAgent:
 
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, training_log_path='./dddqn_training.csv'):
 
         # get size of state and action
         self.state_size = state_size
@@ -19,8 +21,8 @@ class DoubleDQNAgent:
         self.initial_epsilon = 1.0
         self.final_epsilon = 0.0001
         self.batch_size = 32
-        self.observe = 5000
-        self.explore = 50000
+        self.observe = 0
+        self.explore = 5000
         self.frame_per_action = 4
         self.update_target_freq = 3000
         self.timestep_per_train = 100  # Number of timesteps between training interval
@@ -32,6 +34,8 @@ class DoubleDQNAgent:
         # create main model and target model
         self.model = None
         self.target_model = None
+        self.training_log_path = training_log_path
+        self.callbacks = self.init_callbacks()
 
         # Performance Statistics
         self.stats_window_size = 50  # window size for computing rolling statistics
@@ -39,6 +43,13 @@ class DoubleDQNAgent:
         self.var_score = []  # Variance of Survival Time
         self.mavg_ammo_left = []  # Moving Average of Ammo used
         self.mavg_kill_counts = []  # Moving Average of Kill Counts
+
+    def init_callbacks(self):
+        if os.path.exists(self.training_log_path):
+            os.remove(self.training_log_path)
+
+        csv_logger = CSVLogger(self.training_log_path, append=True)
+        return [csv_logger]
 
     def update_target_model(self):
         """
@@ -57,18 +68,19 @@ class DoubleDQNAgent:
             action_idx = np.argmax(q)
         return action_idx
 
-    def shape_reward(self, r_t, misc, prev_misc, t, game_time=0):
+    def shape_reward(self, r_t, misc, prev_misc, t):
         # Check any kill count
-        if (misc[0] < prev_misc[0]):  # Loss HEALTH
-            r_t = r_t - 1.0
-
-        r_t = r_t + game_time * 0.001
+        if misc[0] < prev_misc[0]:  # Loss HEALTH
+            r_t = -10.0
+        elif misc[1] > 720 or misc[1] < 30:
+            r_t = 0
 
         return r_t
 
     # Save trajectory sample <s,a,r,s'> to the replay memory
     def replay_memory(self, s_t, action_idx, r_t, s_t1, is_terminated, t):
         self.memory.append((s_t, action_idx, r_t, s_t1, is_terminated))
+
         if self.epsilon > self.final_epsilon and t > self.observe:
             self.epsilon -= (self.initial_epsilon -
                              self.final_epsilon) / self.explore
@@ -82,7 +94,6 @@ class DoubleDQNAgent:
 
     # Pick samples randomly from replay memory (with batch_size)
     def train_replay(self):
-
         num_samples = min(self.batch_size *
                           self.timestep_per_train, len(self.memory))
         replay_samples = random.sample(self.memory, num_samples)
@@ -116,9 +127,9 @@ class DoubleDQNAgent:
                     self.gamma * (target_val_[i][a])
 
         loss = self.model.fit(update_input, target,
-                              batch_size=self.batch_size, epochs=1, verbose=0)
+                              batch_size=self.batch_size, epochs=1, verbose=0, callbacks=self.callbacks)
 
-        print('Loss obj', loss.history['loss'][0])
+        # Q_max, loss
         return np.max(target[-1]), loss.history['loss'][0]
 
     # load the saved model
