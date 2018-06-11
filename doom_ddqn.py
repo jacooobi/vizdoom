@@ -21,7 +21,7 @@ from time import sleep
 import tensorflow as tf
 
 from networks import dqn
-from DoubleDQNAgent import DoubleDQNAgent
+from agents.DoubleDQNAgent import DoubleDQNAgent
 
 
 def preprocess_img(img, size):

@@ -2,3 +2,6 @@ _vizdoom.ini
 
 statistics/*
 !statistics/.gitkeep
+!statistics/*.csv
+
+test.png
