@@ -8,7 +8,7 @@ from keras.callbacks import CSVLogger
 
 class DoubleDQNAgent:
 
-    def __init__(self, state_size, action_size, training_log_path='./statistics/dddqn_training.csv'):
+    def __init__(self, state_size, action_size):
 
         # get size of state and action
         self.state_size = state_size
@@ -34,8 +34,6 @@ class DoubleDQNAgent:
         # create main model and target model
         self.model = None
         self.target_model = None
-        self.training_log_path = training_log_path
-        self.callbacks = self.init_callbacks()
 
         # Performance Statistics
         self.stats_window_size = 50  # window size for computing rolling statistics
@@ -43,13 +41,6 @@ class DoubleDQNAgent:
         self.var_score = []  # Variance of Survival Time
         self.mavg_ammo_left = []  # Moving Average of Ammo used
         self.mavg_kill_counts = []  # Moving Average of Kill Counts
-
-    def init_callbacks(self):
-        if os.path.exists(self.training_log_path):
-            os.remove(self.training_log_path)
-
-        csv_logger = CSVLogger(self.training_log_path, append=True)
-        return [csv_logger]
 
     def update_target_model(self):
         """
@@ -70,9 +61,21 @@ class DoubleDQNAgent:
 
     def shape_reward(self, r_t, misc, prev_misc, t):
         # Check any kill count
-        # if misc[0] < prev_misc[0]:  # Loss HEALTH
-        #     r_t = -10.0
+        if misc[0] < 100:  # Loss HEALTH
+            r_t = -100.0
 
+        # Calculate negative reward for distance from center
+        map_width = 768
+        map_center = map_width / 2.0
+        pos_y = misc[1]
+        r_t = r_t - abs(map_center - pos_y) / map_center * 5.0
+
+        # print('Distance from center negative reward: {:2.4f}'.format(
+        #     abs(map_center - pos_y) / map_center * 10.0))
+
+        return r_t
+
+    def shape_reward_simple(self, r_t, misc, prev_misc, t):
         return r_t
 
     # Save trajectory sample <s,a,r,s'> to the replay memory
@@ -125,7 +128,7 @@ class DoubleDQNAgent:
                     self.gamma * (target_val_[i][a])
 
         loss = self.model.fit(update_input, target,
-                              batch_size=self.batch_size, epochs=1, verbose=0, callbacks=self.callbacks)
+                              batch_size=self.batch_size, epochs=1, verbose=0)
 
         # Q_max, loss
         return np.max(target[-1]), loss.history['loss'][0]
