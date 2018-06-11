@@ -25,7 +25,7 @@ MODEL_SAVING_INTERVAL = 5000
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='./model/dueling_ddqn.h5',
-                        help='Save model path. This will be omitted when using --load-model flag')
+                        help='Save model path.')
     parser.add_argument(
         '--scenario', default='./scenarios/take_cover_slow_imps.cfg')
     parser.add_argument('--load-model', type=str,
@@ -49,13 +49,11 @@ if __name__ == "__main__":
 
     args = get_args()
     load_model = args.load_model
-    model_path = load_model if load_model else args.model
+    model_path = args.model
     scenario = args.scenario
     log_file = args.log_file
     skip_learning = args.skip_learning
     show_window = args.show_window or skip_learning
-
-    print('Using model {}'.format(model_path))
 
     game = DoomGame()
     game.load_config(scenario)
@@ -83,8 +81,10 @@ if __name__ == "__main__":
         state_size, action_size, agent.learning_rate)
 
     if load_model:
-        print('Loading model: {}'.format(model_path))
-        agent.load_model(model_path)
+        print('Loading model: {}'.format(load_model))
+        agent.load_model(load_model)
+    else:
+        print('No model loaded. Creating new...')
 
     if skip_learning:
         # Make sure that epsilon is <= 0
@@ -168,9 +168,8 @@ if __name__ == "__main__":
                 GAME += 1
                 life_buffer.append(life)
 
-                print('Episode Finish. r_t = {}, Total reward = {}'.format(
-                    r_t, total_reward), misc)
-
+                print('[Game {:5d}] Total reward = {}'.format(
+                    GAME, total_reward))
                 with open(log_file, 'a') as fp:
                     fp.write('{},{}\n'.format(
                         GAME, game.get_total_reward()))
@@ -204,7 +203,7 @@ if __name__ == "__main__":
             # Do the training
             if t > agent.observe and t % agent.timestep_per_train == 0:
                 Q_max, loss = agent.train_replay()
-                print('[Training] Q_max = {}, Loss = {}'.format(Q_max, loss))
+                # print('[Training] Q_max = {}, Loss = {}'.format(Q_max, loss))
 
             s_t = s_t1
             t += 1
