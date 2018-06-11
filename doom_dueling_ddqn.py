@@ -159,6 +159,7 @@ if __name__ == "__main__":
 
             # each frame we get reward of 2.5, so 4 frames will be 10.0
             r_t = game.get_last_reward()
+            # print('r_t = {}'.format(r_t))
 
             if is_terminated:
                 # It's just for agent performance
@@ -168,11 +169,11 @@ if __name__ == "__main__":
                 GAME += 1
                 life_buffer.append(life)
 
-                print('[Game {:5d}] Total reward = {}'.format(
-                    GAME, total_reward))
+                print('[Game {:5d}] Total reward = {:3.0f}'.format(
+                    GAME, misc[0]))
                 with open(log_file, 'a') as fp:
                     fp.write('{},{}\n'.format(
-                        GAME, game.get_total_reward()))
+                        GAME, misc[0]))
 
                 game.new_episode()
                 game_state = game.get_state()
@@ -187,7 +188,8 @@ if __name__ == "__main__":
             s_t1 = np.append(x_t1, s_t[:, :, :, :3], axis=3)
 
             # r_t = agent.shape_reward(r_t, misc, prev_misc, t)
-            r_t = agent.shape_reward_simple(r_t, misc, prev_misc, t)
+            # r_t = agent.shape_reward_simple(r_t, misc, prev_misc, t)
+            r_t = agent.shape_reward_line(r_t, misc, prev_misc, t)
 
             if is_terminated:
                 life = 0
@@ -232,10 +234,6 @@ if __name__ == "__main__":
                     print("Update Rolling Statistics")
                     agent.mavg_score.append(np.mean(np.array(life_buffer)))
                     agent.var_score.append(np.var(np.array(life_buffer)))
-                    agent.mavg_ammo_left.append(np.mean(np.array(ammo_buffer)))
-                    agent.mavg_kill_counts.append(
-                        np.mean(np.array(kills_buffer)))
-
                     # Reset rolling stats buffer
                     life_buffer = []
 
@@ -247,7 +245,3 @@ if __name__ == "__main__":
                                          str(agent.mavg_score) + '\n')
                         stats_file.write(
                             'var_score: ' + str(agent.var_score) + '\n')
-                        stats_file.write('mavg_ammo_left: ' +
-                                         str(agent.mavg_ammo_left) + '\n')
-                        stats_file.write('mavg_kill_counts: ' +
-                                         str(agent.mavg_kill_counts) + '\n')

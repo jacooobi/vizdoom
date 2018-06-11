@@ -78,6 +78,29 @@ class DoubleDQNAgent:
     def shape_reward_simple(self, r_t, misc, prev_misc, t):
         return r_t
 
+    def shape_reward_line(self, r_t, misc, prev_misc, t):
+        ''' Shape reward function for "Defend the line" scenario.
+        0 - KILLCOUNT
+        1 - AMMO2
+        2 - HEALTH
+        '''
+
+        kill_count = misc[0] - prev_misc[0]
+        ammo_lost = misc[1] - prev_misc[1]
+        health_loss = misc[2] - prev_misc[2]
+
+        # Has lost any ammo
+        if ammo_lost > 0:
+            r_t = r_t - 0.05
+
+        if kill_count > 0:
+            r_t = r_t + 1.0
+
+        if health_loss > 0:
+            r_t = r_t - 1.5
+
+        return r_t
+
     # Save trajectory sample <s,a,r,s'> to the replay memory
     def replay_memory(self, s_t, action_idx, r_t, s_t1, is_terminated, t):
         self.memory.append((s_t, action_idx, r_t, s_t1, is_terminated))
