@@ -8,7 +8,7 @@ import argparse
 def get_series(file_path):
     df = pd.read_csv(file_path)
     df = df['total_reward']
-    return list(df)
+    return df
 
 
 def create_plot(series, dpi):
@@ -22,14 +22,16 @@ if __name__ == '__main__':
     parser.add_argument('log_path', type=str, help='Statistics file')
     parser.add_argument('--save-to-file', type=str,
                         help='Image output filename')
-    parser.add_argument('--point-interval', type=int,
-                        help='Applied as series[::<interval>]')
+    parser.add_argument('--rolling-mean', type=int,
+                        help='Rolling mean window size')
     parser.add_argument('--dpi', type=int, default=144)
     args = parser.parse_args()
 
     series = get_series(args.log_path)
-    if args.point_interval:
-        series = series[::args.point_interval]
+    if args.rolling_mean:
+        series = pd.Series(series).rolling(
+            window=args.rolling_mean, center=False).mean()
+    series = list(series)
 
     ax, fig = create_plot(series, args.dpi)
 
